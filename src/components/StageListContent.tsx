@@ -183,7 +183,7 @@ export default function StageListContent({ initialStages = [] }: StageListConten
           <div className="max-w-7xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <button
-                onClick={() => window.history.back()}
+                onClick={() => router.push('/')}
                 className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-4 py-2 rounded-lg transition-all duration-200 border border-white/30 text-sm hover:scale-105"
               >
                 ← 返回首页
