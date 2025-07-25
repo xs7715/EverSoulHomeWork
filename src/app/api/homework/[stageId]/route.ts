@@ -36,13 +36,13 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      homeworks: homeworks.map(homework => ({
+      homeworks: homeworks.map((homework: { id: any; nickname: any; description: any; teamCount: any; createdAt: any; images: any[]; }) => ({
         id: homework.id,
         nickname: homework.nickname,
         description: homework.description,
         teamCount: homework.teamCount,
         createdAt: homework.createdAt,
-        images: homework.images.map(img => ({
+        images: homework.images.map((img: { id: any; filename: any; originalName: any; order: any; }) => ({
           id: img.id,
           filename: img.filename,
           originalName: img.originalName,

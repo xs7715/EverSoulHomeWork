@@ -116,12 +116,13 @@ export async function POST(request: NextRequest) {
       const filepath = path.join(UPLOAD_DIR, filename)
 
       // 读取和优化图片
-      const buffer = Buffer.from(await image.arrayBuffer())
+      const arrayBuffer = await image.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
       let processedBuffer = buffer
 
       try {
         // 使用sharp优化图片（压缩、调整大小）
-        processedBuffer = await sharp(buffer)
+        const sharpBuffer = await sharp(buffer)
           .resize(1920, 1080, { 
             fit: 'inside',
             withoutEnlargement: true 
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
             progressive: true 
           })
           .toBuffer()
+        processedBuffer = Buffer.from(sharpBuffer)
       } catch (error) {
         console.warn('图片优化失败，使用原图片:', error)
       }
