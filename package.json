@@ -17,7 +17,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.294.0",
     "multer": "^2.0.2",
-    "next": "14.0.4",
+    "next": "^14.2.30",
     "next-auth": "^4.24.11",
     "postcss": "^8",
     "react": "^18",

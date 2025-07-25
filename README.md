@@ -19,10 +19,11 @@
 ### 构建
 
 ```bash
+npm nstall
 npm run build
-npm start
 npx prisma generate
 npx prisma db push
+npm run start
 ```
 
 ## 贡献指南
