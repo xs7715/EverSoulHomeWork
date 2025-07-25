@@ -38,6 +38,3 @@ prisma/dev.db-journal
 
 # Uploads
 public/uploads/
-
-# 管理员密码文件 - 绝对不要提交到版本控制
-admin-secret.txt 

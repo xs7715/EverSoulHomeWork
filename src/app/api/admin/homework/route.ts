@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      homeworks: homeworks.map(homework => ({
+      homeworks: homeworks.map((homework: { id: any; stageId: any; nickname: any; description: any; teamCount: any; status: any; createdAt: any; updatedAt: any; images: any[]; }) => ({
         id: homework.id,
         stageId: homework.stageId,
         nickname: homework.nickname,
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         status: homework.status,
         createdAt: homework.createdAt,
         updatedAt: homework.updatedAt,
-        images: homework.images.map(img => ({
+        images: homework.images.map((img: { id: any; filename: any; originalName: any; order: any; fileSize: any; }) => ({
           id: img.id,
           filename: img.filename,
           originalName: img.originalName,
