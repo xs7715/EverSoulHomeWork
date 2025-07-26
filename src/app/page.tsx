@@ -88,8 +88,16 @@ export default function HomePage() {
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-gray-900">EverSoul 作业站</h1>
             </div>
-            <div className="text-sm text-gray-600">
-              作业分享平台，一起逃课吧
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-600">
+                作业分享平台，一起逃课吧
+              </div>
+              <a 
+                href="/admin"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                🔐 管理后台
+              </a>
             </div>
           </div>
         </div>

@@ -10,115 +10,45 @@ import {
 } from '@/types';
 
 // GitHub 数据获取基础 URL
-const GITHUB_BASE_URL = 'https://raw.githubusercontent.com/PackageInstaller/DataTable/master/EverSoul/MasterData/Global';
+const GITHUB_BASE_URL = 'https://edgeone.gh-proxy.com/raw.githubusercontent.com/PackageInstaller/DataTable/master/EverSoul/MasterData/Global';
 
-// 缓存数据 - 使用全局对象确保在不同模块间共享
+// 缓存配置
+const CACHE_CONFIG = {
+  enableMemoryCache: true, // 启用内存缓存作为二级缓存
+  enableDatabaseCache: true, // 启用数据库缓存
+  maxMemoryCacheSize: 50, // 增加内存缓存大小补偿
+  cacheExpiryHours: 2 // 缓存过期时间（小时）
+};
+
+// 全局内存缓存（作为二级缓存，提高性能）
 declare global {
   var __appCache: {
     dataCache: Map<string, any>;
     cacheHitCount: number;
     cacheMissCount: number;
+    dbHitCount: number;
+    initialized: boolean;
   } | undefined;
 }
 
-// 初始化或获取全局缓存
-if (!global.__appCache) {
+// 初始化内存缓存
+function initializeMemoryCache() {
+  if (global.__appCache && global.__appCache.initialized) {
+    return;
+  }
+  
+  console.log('🚀 [DataUtils] 初始化内存缓存');
   global.__appCache = {
     dataCache: new Map<string, any>(),
     cacheHitCount: 0,
-    cacheMissCount: 0
+    cacheMissCount: 0,
+    dbHitCount: 0,
+    initialized: true
   };
 }
 
-const dataCache = global.__appCache.dataCache;
-let cacheHitCount = global.__appCache.cacheHitCount;
-let cacheMissCount = global.__appCache.cacheMissCount;
-
-// 缓存统计信息
-interface CacheStats {
-  totalEntries: number;
-  cacheHits: number;
-  cacheMisses: number;
-  totalMemoryUsage: string;
-  entries: Array<{
-    key: string;
-    dataSource: string;
-    fileName: string;
-    itemCount: number;
-    cacheTime: Date;
-    memorySize: string;
-  }>;
-}
-
-/**
- * 获取缓存统计信息
- */
-export function getCacheStats(): CacheStats {
-  // 确保从全局缓存获取最新数据
-  const currentCache = global.__appCache?.dataCache || new Map();
-  const currentHits = global.__appCache?.cacheHitCount || 0;
-  const currentMisses = global.__appCache?.cacheMissCount || 0;
-  
-  const entries = Array.from(currentCache.entries()).map(([key, data]) => {
-    const [dataSource, fileName] = key.split('-');
-    const itemCount = Array.isArray(data) ? data.length : (typeof data === 'object' ? Object.keys(data).length : 1);
-    const dataStr = JSON.stringify(data);
-    const memorySize = `${Math.round(dataStr.length / 1024)}KB`;
-    
-    return {
-      key,
-      dataSource,
-      fileName,
-      itemCount,
-      cacheTime: new Date(), // 简化版本，实际应该记录真实缓存时间
-      memorySize
-    };
-  });
-
-  const totalMemoryUsage = entries.reduce((total, entry) => {
-    return total + parseInt(entry.memorySize.replace('KB', ''));
-  }, 0);
-
-  debugLog(`获取缓存统计: 条目=${currentCache.size}, 命中=${currentHits}, 未命中=${currentMisses}`);
-
-  return {
-    totalEntries: currentCache.size,
-    cacheHits: currentHits,
-    cacheMisses: currentMisses,
-    totalMemoryUsage: `${totalMemoryUsage}KB`,
-    entries
-  };
-}
-
-/**
- * 清除所有缓存
- */
-export function clearCache(): void {
-  const currentCache = global.__appCache?.dataCache || new Map();
-  currentCache.clear();
-  
-  if (global.__appCache) {
-    global.__appCache.cacheHitCount = 0;
-    global.__appCache.cacheMissCount = 0;
-  }
-  
-  debugLog('缓存已清除');
-}
-
-/**
- * 预加载指定数据源的所有数据
- */
-export async function preloadGameData(dataSource: DataSource): Promise<void> {
-  debugLog(`开始预加载 ${dataSource} 数据源的所有数据`);
-  
-  try {
-    await loadGameData(dataSource);
-    debugLog(`${dataSource} 数据源预加载完成`);
-  } catch (error) {
-    debugLog(`${dataSource} 数据源预加载失败`, error);
-    throw error;
-  }
-}
+// 立即初始化内存缓存
+initializeMemoryCache();
 
 // 阵型类型映射（参考 Python 配置）
 const FORMATION_TYPE_MAPPING: { [key: number]: string } = {
@@ -130,30 +60,105 @@ const FORMATION_TYPE_MAPPING: { [key: number]: string } = {
 
 // 调试日志函数
 function debugLog(message: string, data?: any) {
-  // Debug logging disabled in production
+  console.log(`[DataUtils] ${message}`, data || '');
 }
 
 /**
- * 从 GitHub 获取 JSON 数据
+ * 从数据库获取缓存数据
+ */
+async function getCachedDataFromDB(dataSource: DataSource, fileName: string): Promise<any | null> {
+  if (!CACHE_CONFIG.enableDatabaseCache || typeof window === 'undefined') return null;
+  
+  try {
+    const baseUrl = window.location.origin;
+    const cacheEntry = await fetch(`${baseUrl}/api/cache/get/${dataSource}/${fileName}`);
+    if (!cacheEntry.ok) {
+      if (cacheEntry.status === 404) {
+        debugLog(`💭 数据库缓存不存在: ${dataSource}/${fileName} (首次访问)`);
+      }
+      return null; // 缓存不存在或过期
+    }
+    const data = await cacheEntry.json();
+    if (!data || !data.isValid) {
+      return null;
+    }
+    
+    // 检查缓存是否过期
+    const expiryTime = new Date(data.fetchedAt);
+    expiryTime.setHours(expiryTime.getHours() + CACHE_CONFIG.cacheExpiryHours);
+    
+    if (new Date() > expiryTime) {
+      debugLog(`⏰ 数据库缓存已过期: ${dataSource}/${fileName}`);
+      return null;
+    }
+    
+    global.__appCache!.dbHitCount++;
+    debugLog(`🗄️ 数据库缓存命中: ${dataSource}/${fileName} (DB命中: ${global.__appCache!.dbHitCount})`);
+    
+    return JSON.parse(data.data);
+  } catch (error) {
+    debugLog(`数据库缓存读取失败: ${dataSource}/${fileName}`, error);
+    return null;
+  }
+}
+
+/**
+ * 将数据保存到数据库缓存
+ */
+async function saveCachedDataToDB(dataSource: DataSource, fileName: string, data: any): Promise<void> {
+  if (!CACHE_CONFIG.enableDatabaseCache || typeof window === 'undefined') return;
+  
+  try {
+    const baseUrl = window.location.origin;
+    await fetch(`${baseUrl}/api/cache/save/${dataSource}/${fileName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ data: JSON.stringify(data), fetchedAt: new Date(), isValid: true })
+    });
+    
+    debugLog(`💾 数据已保存到数据库缓存: ${dataSource}/${fileName}`);
+  } catch (error) {
+    debugLog(`数据库缓存保存失败: ${dataSource}/${fileName}`, error);
+  }
+}
+
+/**
+ * 从 GitHub 获取 JSON 数据（使用数据库缓存 + 内存缓存）
  */
 export async function fetchJsonFromGitHub(dataSource: DataSource, fileName: string): Promise<any> {
+  initializeMemoryCache();
+  
   const cacheKey = `${dataSource}-${fileName}`;
   
-  debugLog(`尝试获取数据: ${fileName} (数据源: ${dataSource})`);
+  debugLog(`🔍 尝试获取数据: ${fileName} (数据源: ${dataSource})`);
   
-  if (dataCache.has(cacheKey)) {
+  // 1. 检查内存缓存
+  if (CACHE_CONFIG.enableMemoryCache && global.__appCache!.dataCache.has(cacheKey)) {
     global.__appCache!.cacheHitCount++;
-    cacheHitCount = global.__appCache!.cacheHitCount;
-    debugLog(`使用缓存数据: ${fileName} (缓存命中: ${cacheHitCount})`);
-    return dataCache.get(cacheKey);
+    debugLog(`⚡ 内存缓存命中: ${fileName} (内存命中: ${global.__appCache!.cacheHitCount})`);
+    return global.__appCache!.dataCache.get(cacheKey);
   }
-
+  
+  // 2. 检查数据库缓存
+  const dbData = await getCachedDataFromDB(dataSource, fileName);
+  if (dbData) {
+    // 将数据库缓存加载到内存缓存
+    if (CACHE_CONFIG.enableMemoryCache) {
+      global.__appCache!.dataCache.set(cacheKey, dbData);
+      manageMemoryCacheSize();
+    }
+    return dbData;
+  }
+  
+  // 3. 从GitHub下载数据
   global.__appCache!.cacheMissCount++;
-  cacheMissCount = global.__appCache!.cacheMissCount;
+  debugLog(`❌ 所有缓存未命中，开始下载: ${fileName} (未命中: ${global.__appCache!.cacheMissCount})`);
 
   try {
     const url = `${GITHUB_BASE_URL}/${dataSource}/${fileName}.json`;
-    debugLog(`发起请求: ${url}`);
+    debugLog(`🌐 发起网络请求: ${url}`);
     
     const response = await fetch(url, {
       headers: {
@@ -162,7 +167,7 @@ export async function fetchJsonFromGitHub(dataSource: DataSource, fileName: stri
       }
     });
     
-    debugLog(`响应状态: ${response.status} ${response.statusText}`);
+    debugLog(`📡 响应状态: ${response.status} ${response.statusText}`);
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText} - URL: ${url}`);
@@ -191,8 +196,19 @@ export async function fetchJsonFromGitHub(dataSource: DataSource, fileName: stri
       throw new Error(`JSON 解析失败: ${parseError}`);
     }
     
-    dataCache.set(cacheKey, data);
-    debugLog(`数据已缓存: ${fileName}, 最终数据类型: ${Array.isArray(data) ? `数组 (${data.length} 项)` : typeof data}`);
+    // 保存到内存缓存
+    if (CACHE_CONFIG.enableMemoryCache) {
+      global.__appCache!.dataCache.set(cacheKey, data);
+      manageMemoryCacheSize();
+    }
+    
+    // 异步保存到数据库缓存
+    saveCachedDataToDB(dataSource, fileName, data).catch(err => {
+      console.error('异步保存数据库缓存失败:', err);
+    });
+    
+    debugLog(`💾 数据已缓存: ${fileName}, 最终数据类型: ${Array.isArray(data) ? `数组 (${data.length} 项)` : typeof data}`);
+    
     return data;
   } catch (error) {
     debugLog(`获取数据失败: ${fileName}`, error);
@@ -942,4 +958,95 @@ export async function getStageList(dataSource: DataSource): Promise<Stage[]> {
     console.error('Error getting stage list:', error);
     return [];
   }
-} 
+}
+
+/**
+ * 获取缓存统计信息
+ */
+export async function getCacheStats() {
+  const memoryCache = global.__appCache?.dataCache || new Map();
+  const memoryHits = global.__appCache?.cacheHitCount || 0;
+  const memoryMisses = global.__appCache?.cacheMissCount || 0;
+  const dbHits = global.__appCache?.dbHitCount || 0;
+  
+  let dbStats = null;
+  if (typeof window !== 'undefined') {
+    try {
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/api/cache/stats`);
+      if (response.ok) {
+        const result = await response.json();
+        dbStats = result.stats;
+      }
+    } catch (error) {
+      console.error('获取数据库缓存统计失败:', error);
+    }
+  }
+  
+  return {
+    memory: {
+      totalEntries: memoryCache.size,
+      cacheHits: memoryHits,
+      cacheMisses: memoryMisses
+    },
+    database: {
+      hits: dbHits,
+      stats: dbStats
+    }
+  };
+}
+
+/**
+ * 清除所有缓存
+ */
+export async function clearCache(): Promise<void> {
+  // 清除内存缓存
+  if (global.__appCache) {
+    global.__appCache.dataCache.clear();
+    global.__appCache.cacheHitCount = 0;
+    global.__appCache.cacheMissCount = 0;
+    global.__appCache.dbHitCount = 0;
+  }
+  
+  // 清除数据库缓存
+  if (typeof window !== 'undefined') {
+    try {
+      const baseUrl = window.location.origin;
+      const response = await fetch(`${baseUrl}/api/cache/clear`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        debugLog(`缓存已清除（内存 + 数据库）- ${result.message}`);
+      } else {
+        debugLog('缓存已清除（内存），数据库清理失败');
+      }
+    } catch (error) {
+      console.error('清除数据库缓存失败:', error);
+      debugLog('缓存已清除（仅内存）');
+    }
+  } else {
+    debugLog('缓存已清除（仅内存）');
+  }
+}
+
+// 管理内存缓存大小
+function manageMemoryCacheSize() {
+  if (!CACHE_CONFIG.enableMemoryCache) return;
+  
+  const cache = global.__appCache!.dataCache;
+  const maxSize = CACHE_CONFIG.maxMemoryCacheSize;
+  
+  if (cache.size > maxSize) {
+    const entries = Array.from(cache.entries());
+    const toKeep = entries.slice(-Math.floor(maxSize * 0.8));
+    
+    cache.clear();
+    toKeep.forEach(([key, value]) => {
+      cache.set(key, value);
+    });
+    
+    debugLog(`🧹 内存缓存清理完成: ${entries.length} -> ${cache.size} 条目`);
+  }
+}

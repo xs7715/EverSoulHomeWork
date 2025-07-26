@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import CacheManagement from '@/components/CacheManagement';
 
 interface HomeworkImage {
   id: string;
@@ -35,6 +36,7 @@ export default function AdminHomeworkPage() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'homework' | 'cache'>('homework');
   
   const [homeworks, setHomeworks] = useState<Homework[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,7 +276,7 @@ export default function AdminHomeworkPage() {
         {/* 头部 */}
         <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/20 p-6 mb-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-white mb-4">作业管理后台</h1>
+            <h1 className="text-2xl font-bold text-white mb-4">管理后台</h1>
             <button
               onClick={handleLogout}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
@@ -283,52 +285,81 @@ export default function AdminHomeworkPage() {
             </button>
           </div>
           
-          {/* 状态筛选 */}
-          <div className="flex space-x-4">
-            {[
-              { value: 'pending', label: '待审核' },
-              { value: 'approved', label: '已通过' },
-              { value: 'rejected', label: '已拒绝' },
-              { value: 'all', label: '全部' }
-            ].map(option => (
-              <button
-                key={option.value}
-                onClick={() => setSelectedStatus(option.value)}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  selectedStatus === option.value
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+          {/* 标签页切换 */}
+          <div className="flex space-x-4 mb-6">
+            <button
+              onClick={() => setActiveTab('homework')}
+              className={`px-6 py-3 rounded-lg transition-colors ${
+                activeTab === 'homework'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white/10 text-white/70 hover:bg-white/20'
+              }`}
+            >
+              📝 作业管理
+            </button>
+            <button
+              onClick={() => setActiveTab('cache')}
+              className={`px-6 py-3 rounded-lg transition-colors ${
+                activeTab === 'cache'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-white/10 text-white/70 hover:bg-white/20'
+              }`}
+            >
+              💾 缓存管理
+            </button>
           </div>
+          
+          {/* 作业管理的状态筛选 */}
+          {activeTab === 'homework' && (
+            <div className="flex space-x-4">
+              {[
+                { value: 'pending', label: '待审核' },
+                { value: 'approved', label: '已通过' },
+                { value: 'rejected', label: '已拒绝' },
+                { value: 'all', label: '全部' }
+              ].map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => setSelectedStatus(option.value)}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    selectedStatus === option.value
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* 统计信息 */}
-        <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/20 p-4 mb-6">
-          <div className="text-white text-sm">
-            共 {pagination.total} 个作业 • 第 {pagination.page} 页，共 {pagination.totalPages} 页
-          </div>
-        </div>
+        {/* 根据活跃标签页显示内容 */}
+        {activeTab === 'homework' ? (
+          <>
+            {/* 统计信息 */}
+            <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/20 p-4 mb-6">
+              <div className="text-white text-sm">
+                共 {pagination.total} 个作业 • 第 {pagination.page} 页，共 {pagination.totalPages} 页
+              </div>
+            </div>
 
-        {/* 错误信息 */}
-        {error && (
-          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-6">
-            <p className="text-red-300">{error}</p>
-          </div>
-        )}
+            {/* 错误信息 */}
+            {error && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-6">
+                <p className="text-red-300">{error}</p>
+              </div>
+            )}
 
-        {/* 加载状态 */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-white/70">正在加载...</p>
-          </div>
-        ) : (
-          /* 作业列表 */
-          <div className="space-y-4">
+            {/* 加载状态 */}
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="mt-4 text-white/70">正在加载...</p>
+              </div>
+            ) : (
+              /* 作业列表 */
+              <div className="space-y-4">
             {homeworks.length === 0 ? (
               <div className="text-center py-12 bg-black/20 backdrop-blur-sm rounded-xl border border-white/20">
                 <p className="text-white/70">暂无作业数据</p>
@@ -420,13 +451,13 @@ export default function AdminHomeworkPage() {
                     </button>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        )}
+                ))
+              )}
+            </div>
+          )}
 
-        {/* 分页 */}
-        {!loading && pagination.totalPages > 1 && (
+          {/* 分页 */}
+          {!loading && pagination.totalPages > 1 && (
           <div className="flex justify-center space-x-2 mt-6">
             <button
               onClick={() => fetchHomeworks(selectedStatus, pagination.page - 1)}
@@ -446,7 +477,12 @@ export default function AdminHomeworkPage() {
               下一页
             </button>
           </div>
-        )}
+          )}
+        </>
+      ) : (
+        /* 缓存管理标签页 */
+        <CacheManagement />
+      )}
 
         {/* 图片预览模态框 */}
         {selectedImage && (
