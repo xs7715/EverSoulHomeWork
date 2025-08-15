@@ -192,7 +192,7 @@ export default function StageDetailPage() {
           </div>
 
           {/* 关卡详情组件 */}
-          <div className="mx-auto p-4 sm:p-6">
+          <div className="mx-auto p-1 sm:p-6">
             <StageDetails stageDetails={stageDetails} dataSource={dataSource} />
           </div>
         </div>

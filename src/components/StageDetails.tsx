@@ -25,7 +25,7 @@ export default function StageDetails({ stageDetails, dataSource }: StageDetailsP
 
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="max-w-6xl mx-auto p-1 space-y-6">
       {/* 标题和基本信息 */}
       <div className="stage-card">
         <div className="flex items-center justify-between mb-4">
